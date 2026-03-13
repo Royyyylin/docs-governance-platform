@@ -1,0 +1,74 @@
+name: docs-staleness
+
+on:
+  workflow_call:
+    inputs:
+      stale_days:
+        description: 'Days after completion before archiving'
+        type: number
+        default: 7
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  archive-done:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Find stale done files
+        id: find
+        env:
+          STALE_DAYS: ${{ inputs.stale_days }}
+        run: |
+          STALE=""
+          CUTOFF=$(date -d "${STALE_DAYS} days ago" +%Y-%m-%d 2>/dev/null || date -v-${STALE_DAYS}d +%Y-%m-%d)
+          for f in $(find work/ -name "*.md" 2>/dev/null); do
+            status=$(head -10 "$f" | grep "^status:" | sed 's/status: *//')
+            completed=$(head -10 "$f" | grep "^completed:" | sed 's/completed: *//')
+            if [ "$status" = "done" ] && [ -n "$completed" ] && [ "$completed" \< "$CUTOFF" ]; then
+              STALE="$STALE $f"
+            fi
+          done
+          echo "files=$STALE" >> "$GITHUB_OUTPUT"
+          if [ -n "$STALE" ]; then
+            echo "has_stale=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_stale=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Move to archive and open PR
+        if: steps.find.outputs.has_stale == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STALE_FILES: ${{ steps.find.outputs.files }}
+          STALE_DAYS: ${{ inputs.stale_days }}
+        run: |
+          BRANCH="chore/auto-archive-$(date +%Y%m%d)"
+          git checkout -b "$BRANCH"
+
+          for f in $STALE_FILES; do
+            subdir=$(basename "$(dirname "$f")")
+            dest="docs/archive/$subdir/$(basename "$f")"
+            mkdir -p "$(dirname "$dest")"
+            sed -i 's/^status: done/status: archived/' "$f"
+            mv "$f" "$dest"
+          done
+
+          git add -A
+          git commit -m "chore: auto-archive stale work files
+
+          Co-Authored-By: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+
+          git push -u origin "$BRANCH"
+          gh pr create \
+            --title "chore: auto-archive stale docs" \
+            --body "Automated: moved done files (completed > ${STALE_DAYS} days) to docs/archive/" \
+            --label "docs"

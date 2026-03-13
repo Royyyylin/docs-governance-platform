@@ -1,0 +1,9 @@
+name: 'Docs Frontmatter Check'
+description: 'Validate YAML frontmatter in docs files per docs-governance spec'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check frontmatter
+      shell: bash
+      run: bash "${{ github.action_path }}/check-frontmatter.sh"

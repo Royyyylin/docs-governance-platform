@@ -1,0 +1,23 @@
+name: 'Docs Impact Check'
+description: 'Ensure code changes have corresponding docs/current/ updates'
+
+inputs:
+  code_impact_patterns:
+    description: 'Pipe-separated glob patterns for code files (e.g. "src/*|include/*|Makefile")'
+    required: true
+  docs_not_needed_label:
+    description: 'Label name to bypass the check'
+    default: 'docs-not-needed'
+  base_ref:
+    description: 'Base branch for git diff (without origin/ prefix)'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check docs impact
+      shell: bash
+      env:
+        CODE_IMPACT_PATTERNS: ${{ inputs.code_impact_patterns }}
+        BYPASS_LABEL: ${{ inputs.docs_not_needed_label }}
+      run: bash "${{ github.action_path }}/check-docs-impact.sh" "origin/${{ inputs.base_ref }}"

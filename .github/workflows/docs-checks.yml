@@ -1,0 +1,79 @@
+name: docs-checks
+
+on:
+  workflow_call:
+    inputs:
+      markdownlint_version:
+        description: 'markdownlint-cli2 version (e.g. 0.17.2)'
+        type: string
+        default: '0.17.2'
+      lint_paths:
+        description: 'Space-separated glob paths for markdownlint'
+        type: string
+        default: 'docs/current/**/*.md docs/adr/**/*.md docs/index.md docs/domain/**/*.md work/**/*.md'
+      link_check_folders:
+        description: 'Comma-separated folder paths for link check'
+        type: string
+        default: 'docs/current,docs/adr,docs/domain'
+      link_check_config:
+        description: 'Path to markdown-link-check config'
+        type: string
+        default: '.github/mlc-config.json'
+      code_impact_patterns:
+        description: 'Pipe-separated glob patterns for code-docs sync (e.g. "src/*|include/*|Makefile")'
+        type: string
+        default: 'src/*|include/*'
+      docs_not_needed_label:
+        description: 'Label to bypass code-docs sync check'
+        type: string
+        default: 'docs-not-needed'
+
+jobs:
+  frontmatter:
+    name: Frontmatter validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Royyyylin/docs-governance-platform/actions/frontmatter-check@main
+
+  links:
+    name: Link check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check folder links
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          folder-path: ${{ inputs.link_check_folders }}
+          config-file: ${{ inputs.link_check_config }}
+          use-quiet-mode: 'yes'
+      - name: Check index links
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          file-path: 'docs/index.md'
+          config-file: ${{ inputs.link_check_config }}
+          use-quiet-mode: 'yes'
+
+  lint:
+    name: Markdown lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint markdown
+        env:
+          LINT_VERSION: ${{ inputs.markdownlint_version }}
+          LINT_PATHS: ${{ inputs.lint_paths }}
+        run: npx "markdownlint-cli2@${LINT_VERSION}" ${LINT_PATHS}
+
+  impact:
+    name: Code-docs sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: Royyyylin/docs-governance-platform/actions/impact-check@main
+        with:
+          code_impact_patterns: ${{ inputs.code_impact_patterns }}
+          docs_not_needed_label: ${{ inputs.docs_not_needed_label }}
+          base_ref: ${{ github.base_ref }}

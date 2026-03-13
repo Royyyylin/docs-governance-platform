@@ -1,0 +1,48 @@
+name: docs-index-update
+
+on:
+  workflow_call:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-index:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - uses: Royyyylin/docs-governance-platform/actions/index-gen@main
+
+      - name: Check if index changed
+        id: diff
+        run: |
+          if git diff --quiet docs/index.md 2>/dev/null; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open PR to update index
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="chore/update-docs-index-$(date +%Y%m%d%H%M)"
+          git checkout -b "$BRANCH"
+          git add docs/index.md
+          git commit -m "chore: auto-update docs/index.md
+
+          Co-Authored-By: github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+          git push -u origin "$BRANCH"
+          gh pr create \
+            --title "chore: auto-update docs/index.md" \
+            --body "Automated: docs/index.md regenerated after docs change on main." \
+            --label "docs"
+          gh pr merge "$BRANCH" --auto --squash
