@@ -29,8 +29,57 @@ on:
         default: 'docs-not-needed'
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      docs_changed: ${{ steps.filter.outputs.docs_changed }}
+      code_changed: ${{ steps.filter.outputs.code_changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        env:
+          CODE_PATTERNS: ${{ inputs.code_impact_patterns }}
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}"
+          if [ -z "$BASE_SHA" ]; then
+            CHANGED=$(git diff --name-only HEAD~1 2>/dev/null || echo "")
+          else
+            CHANGED=$(git diff --name-only "$BASE_SHA"...HEAD 2>/dev/null || git diff --name-only HEAD~1 2>/dev/null || echo "")
+          fi
+
+          echo "::group::Changed files"
+          echo "$CHANGED"
+          echo "::endgroup::"
+
+          # Check docs/work paths
+          if echo "$CHANGED" | grep -qE '^(docs/|work/)'; then
+            echo "docs_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Check code impact paths (pipe-separated globs)
+          CODE_CHANGED=false
+          IFS='|' read -ra PATTERNS <<< "$CODE_PATTERNS"
+          for pat in "${PATTERNS[@]}"; do
+            regex="^$(echo "$pat" | sed 's/\./\\./g; s/\*/.*/g')"
+            if echo "$CHANGED" | grep -qE "$regex"; then
+              CODE_CHANGED=true
+              break
+            fi
+          done
+          echo "code_changed=$CODE_CHANGED" >> "$GITHUB_OUTPUT"
+
+          echo "docs_changed=$(grep docs_changed "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2)"
+          echo "code_changed=$CODE_CHANGED"
+
   frontmatter:
     name: Frontmatter validation
+    needs: changes
+    if: needs.changes.outputs.docs_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +87,8 @@ jobs:
 
   links:
     name: Link check
+    needs: changes
+    if: needs.changes.outputs.docs_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,6 +107,8 @@ jobs:
 
   lint:
     name: Markdown lint
+    needs: changes
+    if: needs.changes.outputs.docs_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -67,6 +120,8 @@ jobs:
 
   impact:
     name: Code-docs sync
+    needs: changes
+    if: needs.changes.outputs.docs_changed == 'true' || needs.changes.outputs.code_changed == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
