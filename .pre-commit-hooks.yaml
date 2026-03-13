@@ -1,0 +1,6 @@
+- id: check-frontmatter
+  name: Docs frontmatter validation
+  language: script
+  entry: actions/frontmatter-check/check-frontmatter.sh
+  files: ^(docs|work)/.*\.md$
+  types: [markdown]
