@@ -79,26 +79,35 @@ jobs:
   frontmatter:
     name: Frontmatter validation
     needs: changes
-    if: needs.changes.outputs.docs_changed == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Skip — no docs changes
+        if: needs.changes.outputs.docs_changed != 'true'
+        run: echo "No docs changes detected — skipping frontmatter validation"
       - uses: actions/checkout@v4
+        if: needs.changes.outputs.docs_changed == 'true'
       - uses: Royyyylin/docs-governance-platform/actions/frontmatter-check@main
+        if: needs.changes.outputs.docs_changed == 'true'
 
   links:
     name: Link check
     needs: changes
-    if: needs.changes.outputs.docs_changed == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Skip — no docs changes
+        if: needs.changes.outputs.docs_changed != 'true'
+        run: echo "No docs changes detected — skipping link check"
       - uses: actions/checkout@v4
+        if: needs.changes.outputs.docs_changed == 'true'
       - name: Check folder links
+        if: needs.changes.outputs.docs_changed == 'true'
         uses: gaurav-nelson/github-action-markdown-link-check@v1
         with:
           folder-path: ${{ inputs.link_check_folders }}
           config-file: ${{ inputs.link_check_config }}
           use-quiet-mode: 'yes'
       - name: Check index links
+        if: needs.changes.outputs.docs_changed == 'true'
         uses: gaurav-nelson/github-action-markdown-link-check@v1
         with:
           file-path: 'docs/index.md'
@@ -108,11 +117,15 @@ jobs:
   lint:
     name: Markdown lint
     needs: changes
-    if: needs.changes.outputs.docs_changed == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Skip — no docs changes
+        if: needs.changes.outputs.docs_changed != 'true'
+        run: echo "No docs changes detected — skipping markdown lint"
       - uses: actions/checkout@v4
+        if: needs.changes.outputs.docs_changed == 'true'
       - name: Lint markdown
+        if: needs.changes.outputs.docs_changed == 'true'
         env:
           LINT_VERSION: ${{ inputs.markdownlint_version }}
           LINT_PATHS: ${{ inputs.lint_paths }}
@@ -121,13 +134,17 @@ jobs:
   impact:
     name: Code-docs sync
     needs: changes
-    if: needs.changes.outputs.docs_changed == 'true' || needs.changes.outputs.code_changed == 'true'
     runs-on: ubuntu-latest
     steps:
+      - name: Skip — no relevant changes
+        if: needs.changes.outputs.docs_changed != 'true' && needs.changes.outputs.code_changed != 'true'
+        run: echo "No docs or code changes detected — skipping code-docs sync"
       - uses: actions/checkout@v4
+        if: needs.changes.outputs.docs_changed == 'true' || needs.changes.outputs.code_changed == 'true'
         with:
           fetch-depth: 0
       - uses: Royyyylin/docs-governance-platform/actions/impact-check@main
+        if: needs.changes.outputs.docs_changed == 'true' || needs.changes.outputs.code_changed == 'true'
         with:
           code_impact_patterns: ${{ inputs.code_impact_patterns }}
           docs_not_needed_label: ${{ inputs.docs_not_needed_label }}
